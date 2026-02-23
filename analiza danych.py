@@ -11,7 +11,7 @@ def rysuj_wykres_ciagly(df):
 
         plt.figure(figsize=(15, 5))
 
-        # 2. Rysujemy jedną linię
+        # Wykres jako jedna linia
         plt.plot(dane_ciagle, marker='o', linestyle='-', color='darkcyan', markersize=4)
 
         # 3. Dodajemy opisy
