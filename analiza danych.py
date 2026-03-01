@@ -1,8 +1,43 @@
+import sys
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QInputDialog, QMessageBox, QLabel)
 
+# Budowanie aplikacji
+class OknoGlowne(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.df = None
+        self.init_ui()
 
+    def init_ui(self):
+        self.setWindowTitle("Analiza NT-proBNP")
+        self.setGeometry(100, 100, 800, 600)
+
+        # Główny układ
+        layout = QVBoxLayout()
+        central_widget = QWidget()
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+
+        # Przyciski
+        self.btn_wczytaj = QPushButton("1. Wczytaj plik (CSV/JSON)")
+        self.btn_wczytaj.clicked.connect(self.wczytaj_plik)
+        layout.addWidget(self.btn_wczytaj)
+
+        self.btn_statystyki = QPushButton("2. Analiza statystyczna")
+        self.btn_statystyki.clicked.connect(self.oblicz_statystyki)
+        layout.addWidget(self.btn_statystyki)
+
+        self.btn_wykres = QPushButton("3. Generuj wykres")
+        self.btn_wykres.clicked.connect(self.rysuj_wykres)
+        layout.addWidget(self.btn_wykres)
+
+        # Tabela do podglądu danych (zamiast df.head())
+        self.tabela = QTableWidget()
+        layout.addWidget(QLabel("Podgląd danych:"))
+        layout.addWidget(self.tabela)
 
 # Bydowanie wykresu
 def rysuj_wykres_ciagly(df):
