@@ -4,7 +4,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QInputDialog, QMessageBox, QLabel)
 
-# Budowanie aplikacji
+# budowa api
 class OknoGlowne(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -15,29 +15,77 @@ class OknoGlowne(QMainWindow):
         self.setWindowTitle("Analiza NT-proBNP")
         self.setGeometry(100, 100, 800, 600)
 
-        # Główny układ
+
         layout = QVBoxLayout()
-        central_widget = QWidget()
-        central_widget.setLayout(layout)
-        self.setCentralWidget(central_widget)
+        centralny_widget = QWidget()
+        centralny_widget.setLayout(layout)
+        self.setCentralWidget(centralny_widget)
 
-        # Przyciski
-        self.btn_wczytaj = QPushButton("1. Wczytaj plik (CSV/JSON)")
-        self.btn_wczytaj.clicked.connect(self.wczytaj_plik)
-        layout.addWidget(self.btn_wczytaj)
+        # przyciski
+        self.przycisk_wczytaj = QPushButton("1. Wczytaj plik (CSV/JSON)")
+        self.przycisk_wczytaj.clicked.connect(self.wczytaj_plik)
+        layout.addWidget(self.przycisk_wczytaj)
 
-        self.btn_statystyki = QPushButton("2. Analiza statystyczna")
-        self.btn_statystyki.clicked.connect(self.oblicz_statystyki)
-        layout.addWidget(self.btn_statystyki)
+        self.przycisk_statystyki = QPushButton("2. Analiza statystyczna")
+        self.przycisk_statystyki.clicked.connect(self.oblicz_statystyki)
+        layout.addWidget(self.przycisk_statystyki)
 
-        self.btn_wykres = QPushButton("3. Generuj wykres")
-        self.btn_wykres.clicked.connect(self.rysuj_wykres)
-        layout.addWidget(self.btn_wykres)
+        self.przycisk_wykres = QPushButton("3. Generuj wykres")
+        self.przycisk_wykres.clicked.connect(self.rysuj_wykres)
+        layout.addWidget(self.przycisk_wykres)
 
-        # Tabela do podglądu danych (zamiast df.head())
         self.tabela = QTableWidget()
         layout.addWidget(QLabel("Podgląd danych:"))
         layout.addWidget(self.tabela)
+
+    def wczytaj_plik(self):
+        sciezka, _ = QFileDialog.getOpenFileName(self, "Otwórz plik", "", "Dane (*.csv *.json)")
+        if sciezka:
+            try:
+                if sciezka.endswith('.csv'):
+                    self.df = pd.read_csv(sciezka, header=None)
+                elif sciezka.endswith('.json'):
+                    self.df = pd.read_json(sciezka)
+
+                self.df = self.df.apply(pd.to_numeric, errors='coerce') # zamiana na liczby i  usuwanie liter
+                self.odswiez_tabele()
+                QMessageBox.information(self, "Plik wczytany pomyślnie.")
+            except Exception as e:
+                QMessageBox.critical(self, "Błąd", f"Nie udało się wczytać pliku: {e}")
+
+    def odswiez_tabele(self):
+        if self.df is not None:
+            df_display = self.df.head(10)  # pierwsze 10 wierszy
+            self.tabela.setRowCount(df_display.shape[0])
+            self.tabela.setColumnCount(df_display.shape[1])
+            for i in range(df_display.shape[0]): # przenoszenie danych z df do tabelki w api
+                for j in range(df_display.shape[1]):
+                    self.tabela.setItem(i, j, QTableWidgetItem(str(df_display.iloc[i, j])))
+
+    def oblicz_statystyki(self):
+        if self.df is None:
+            return QMessageBox.warning(self, "Błąd", "Najpierw wczytaj dane!")
+
+        zakres, ok = QInputDialog.getText(self, "Zakres", f"Podaj zakres kolumn (1-{len(self.df.columns)}), np. 1-2:")
+        if ok and zakres:
+            try:
+                start, end = map(int, zakres.split('-'))
+                wycinek = self.df.iloc[:, start - 1: end].values.flatten()
+                dane = pd.Series(wycinek).dropna()
+
+                if len(dane) == 0:
+                    QMessageBox.warning(self, "Błąd", "Brak danych w tym zakresie")
+                    return
+
+                wyniki = (f"Średnia: {np.mean(dane):.2f}\n"
+                          f"Odchylenie std.: {np.std(dane):.2f}\n"
+                          f"Minimum: {np.min(dane):.2f}\n"
+                          f"Maximum: {np.max(dane):.2f}\n"
+                          f"Liczba pomiarów: {len(dane)}")
+
+                QMessageBox.information(self, f"Wyniki dla {zakres}", wyniki)
+            except Exception as e:
+                QMessageBox.critical(self, "Błąd", f"Nieprawidłowy zakres lub dane: {e}")
 
 # Bydowanie wykresu
 def rysuj_wykres_ciagly(df):
@@ -50,7 +98,7 @@ def rysuj_wykres_ciagly(df):
         plt.plot(dane_ciagle, marker='o', linestyle='-', color='darkcyan', markersize=4)
 
         # 3. Dodajemy opisy
-        plt.title('Ciągły przebieg wszystkich pomiarów (kolumna po kolumnie)')
+        plt.title('Analiza NT-proBNP')
         plt.xlabel('Całkowita liczba punktów pomiarowych')
         plt.ylabel('Wartość')
         plt.grid(True, alpha=0.3)
@@ -66,7 +114,7 @@ def rysuj_wykres_ciagly(df):
 
 
 
-
+# do usunięcia potem
 def menu_glowne():
     df = None
 
