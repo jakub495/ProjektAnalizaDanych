@@ -43,7 +43,7 @@ class OknoGlowne(QMainWindow):
         if sciezka:
             try:
                 if sciezka.endswith('.csv'):
-                    self.df = pd.read_csv(sciezka, header=None)
+                    self.df = pd.read_csv(sciezka)
                 elif sciezka.endswith('.json'):
                     self.df = pd.read_json(sciezka)
 
@@ -55,7 +55,7 @@ class OknoGlowne(QMainWindow):
 
     def odswiez_tabele(self):
         if self.df is not None:
-            df_display = self.df.head(10)  # pierwsze 10 wierszy
+            df_display = self.df
             self.tabela.setRowCount(df_display.shape[0])
             self.tabela.setColumnCount(df_display.shape[1])
             for i in range(df_display.shape[0]): # przenoszenie danych z df do tabelki w api
@@ -64,107 +64,76 @@ class OknoGlowne(QMainWindow):
 
     def oblicz_statystyki(self):
         if self.df is None:
-            return QMessageBox.warning(self, "Błąd", "Najpierw wczytaj dane!")
+            return QMessageBox.warning(self, "Najpierw wczytaj dane")
 
-        zakres, ok = QInputDialog.getText(self, "Zakres", f"Podaj zakres kolumn (1-{len(self.df.columns)}), np. 1-2:")
-        if ok and zakres:
-            try:
-                start, end = map(int, zakres.split('-'))
-                wycinek = self.df.iloc[:, start - 1: end].values.flatten()
-                dane = pd.Series(wycinek).dropna()
+        try:
+            kol_idx, ok1 = QInputDialog.getInt(
+                self, "Wybór kolumny",
+                f"Podaj numer kolumny (1-{len(self.df.columns)}):",
+                value=1, min=1, max=len(self.df.columns)
+            )
+
+            if not ok1:
+                return
+
+            max_wierszy = len(self.df)
+            zakres, ok2 = QInputDialog.getText(
+                self, "Zakres wierszy",
+                f"Podaj zakres wierszy w kolumnie {kol_idx} (1-{max_wierszy}), np. 1-10:"
+            )
+
+            if ok2 and zakres:
+                start_w, end_w = map(int, zakres.split('-'))
+
+                wycinek = self.df.iloc[start_w - 1: end_w, kol_idx - 1]
+                dane = pd.to_numeric(wycinek, errors='coerce').dropna()
 
                 if len(dane) == 0:
-                    QMessageBox.warning(self, "Błąd", "Brak danych w tym zakresie")
+                    QMessageBox.warning(self, "Brak danych liczbowych w podanym zakresie")
                     return
 
-                wyniki = (f"Średnia: {np.mean(dane):.2f}\n"
+                wyniki = (f"Statystyki dla kolumny {kol_idx} (wiersze {start_w}-{end_w}):\n\n"
+                          f"Średnia: {np.mean(dane):.2f}\n"
+                          f"Mediana: {np.median(dane):.2f}\n"
                           f"Odchylenie std.: {np.std(dane):.2f}\n"
                           f"Minimum: {np.min(dane):.2f}\n"
                           f"Maximum: {np.max(dane):.2f}\n"
                           f"Liczba pomiarów: {len(dane)}")
 
-                QMessageBox.information(self, f"Wyniki dla {zakres}", wyniki)
-            except Exception as e:
-                QMessageBox.critical(self, "Błąd", f"Nieprawidłowy zakres lub dane: {e}")
+                QMessageBox.information(self, "Wyniki analizy", wyniki)
 
-# Bydowanie wykresu
-def rysuj_wykres_ciagly(df):
-    if df is not None:
-        dane_ciagle = df.values.flatten()
-
-        plt.figure(figsize=(15, 5))
-
-        # Wykres jako jedna linia
-        plt.plot(dane_ciagle, marker='o', linestyle='-', color='darkcyan', markersize=4)
-
-        # 3. Dodajemy opisy
-        plt.title('Analiza NT-proBNP')
-        plt.xlabel('Całkowita liczba punktów pomiarowych')
-        plt.ylabel('Wartość')
-        plt.grid(True, alpha=0.3)
-
-        # Pionowe linie oddzielające dane z różnych kolumn
-        liczba_wierszy = len(df)
-        for i in range(1, len(df.columns)):
-            plt.axvline(x=i * liczba_wierszy, color='red', linestyle='--', alpha=0.5)
-
-        plt.show()
-    else:
-        print("Błąd: Brak danych!")
+        except ValueError:
+            QMessageBox.critical(self, "Błąd", "Nieprawidłowy format zakresu. Użyj formatu np. '1-10'.")
+        except Exception as e:
+            QMessageBox.critical(self,  "Błąd", f"Wystąpił nieoczekiwany błąd: {e}")
 
 
+# wykres
+    def rysuj_wykres(self):
+        if self.df is not None:
+            dane_ciagle = pd.Series(self.df.values.flatten()).dropna()
 
-# do usunięcia potem
-def menu_glowne():
-    df = None
+            plt.figure(figsize=(15, 5))
 
-    while True:
-        print("\n Analiza NT-proBNP")
-        print("1. Wczytaj plik (CSV/JSON)")
-        print("2. Pokaż podsumowanie danych")
-        print("3. Wyświetl statystyki") #do zrobienia
-        print("4. Generuj wykres")
-        print("0. Wyjście")
+            plt.plot(dane_ciagle, marker='o', linestyle='-', color='darkcyan', markersize=4)
 
-        wybor = input("Wybierz opcję: ")
+            plt.title('Analiza NT-proBNP')
+            plt.xlabel('Pomiar')
+            plt.ylabel('Wartość')
+            plt.grid(True, alpha=0.3)
 
-        if wybor == '1':
-            sciezka = input("Podaj nazwę pliku: ")
-            try:
-                if sciezka.endswith('.csv'):
-                    df = pd.read_csv(sciezka, header=None)
-                    print("CSV wczytany pomyślnie!")
-                elif sciezka.endswith('.json'):
-                    df = pd.read_json(sciezka, header=None)
-                    print("JSON wczytany pomyślnie!")
-                else:
-                    print("Błąd: Obsługujemy tylko .csv i .json")
-            except Exception as e:
-                print(f"BŁĄD: Nie udało się otworzyć pliku. ({e})")
+        # linie oddzielające kolumny
+            liczba_wierszy = len(self.df)
+            for i in range(1, len(self.df.columns)):
+                plt.axvline(x=i * liczba_wierszy, color='red', linestyle='--', alpha=0.5)
 
-        elif wybor == '2':
-            if df is not None:
-                print(df.head())
-            else:
-                print("Błąd: Najpierw wczytaj dane!")
-
-        elif wybor == '3':
-            if df is not None:
-                # pandas.describe() korzysta z numpy do obliczeń/ zamienić na numpy + dodać komunikat o anomaliach
-                print(df.describe())
-            else:
-                print("Błąd: Brak danych do analizy!")
-
-        elif wybor == '4':
-            rysuj_wykres_ciagly(df)
-
-        elif wybor == '0':
-            print("Do widzenia.")
-            break
-
+            plt.show()
         else:
-            print("Nieprawidłowy wybór.")
+            QMessageBox.warning(self, "Brak danych do wykresu")
 
 
 if __name__ == "__main__":
-    menu_glowne()
+    app = QApplication(sys.argv)
+    window = OknoGlowne()
+    window.show()
+    sys.exit(app.exec())
