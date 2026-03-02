@@ -9,6 +9,7 @@ class OknoGlowne(QMainWindow):
     def __init__(self):
         super().__init__()
         self.df = None
+        self.wyniki_statystyk = None
         self.init_ui()
 
     def init_ui(self):
@@ -33,6 +34,10 @@ class OknoGlowne(QMainWindow):
         self.przycisk_wykres = QPushButton("3. Generuj wykres")
         self.przycisk_wykres.clicked.connect(self.rysuj_wykres)
         layout.addWidget(self.przycisk_wykres)
+
+        self.btn_eksport = QPushButton("4. Eksportuj wyniki do CSV")
+        self.btn_eksport.clicked.connect(self.eksportuj_wyniki)
+        layout.addWidget(self.btn_eksport)
 
         self.tabela = QTableWidget()
         layout.addWidget(QLabel("Podgląd danych:"))
@@ -94,13 +99,25 @@ class OknoGlowne(QMainWindow):
                     QMessageBox.warning(self, "Błąd", "Brak danych liczbowych w podanym zakresie")
                     return
 
-                wyniki = (f"Statystyki dla kolumny {kol_idx} (wiersze {start_w}-{end_w}):\n\n"
-                          f"Średnia: {np.mean(dane):.2f}\n"
-                          f"Mediana: {np.median(dane):.2f}\n"
-                          f"Odchylenie std.: {np.std(dane):.2f}\n"
-                          f"Minimum: {np.min(dane):.2f}\n"
-                          f"Maximum: {np.max(dane):.2f}\n"
-                          f"Liczba pomiarów: {len(dane)}")
+                self.wyniki_statystyk = {
+                    "Kolumna": kol_idx,
+                    "Wiersze_od": start_w,
+                    "Wiersze_do": end_w,
+                    "Średnia": np.mean(dane),
+                    "Mediana": np.median(dane),
+                    "Odchylenie_std": np.std(dane),
+                    "Minimum": np.min(dane),
+                    "Maximum": np.max(dane),
+                    "Liczba_pomiarów": len(dane)
+                }
+
+                wyniki = (f"Statystyki dla Kolumny {kol_idx} (wiersze {start_w}-{end_w}):\n\n"
+                          f"Średnia: {self.wyniki_statystyk['Średnia']:.2f}\n"
+                          f"Mediana: {self.wyniki_statystyk['Mediana']:.2f}\n"
+                          f"Odchylenie std.: {self.wyniki_statystyk['Odchylenie_std']:.2f}\n"
+                          f"Minimum: {self.wyniki_statystyk['Minimum']:.2f}\n"
+                          f"Maximum: {self.wyniki_statystyk['Maximum']:.2f}\n"
+                          f"Liczba pomiarów: {self.wyniki_statystyk['Liczba_pomiarów']}")
 
                 QMessageBox.information(self, "Wyniki analizy", wyniki)
 
@@ -109,6 +126,16 @@ class OknoGlowne(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self,  "Błąd", f"Wystąpił nieoczekiwany błąd: {e}")
 
+    def eksportuj_wyniki(self):
+        if self.wyniki_statystyk is None:
+            return QMessageBox.warning(self, "Błąd", "Najpierw wykonaj analizę statystyczną!")
+
+        sciezka, _ = QFileDialog.getSaveFileName(
+            self,
+            "Zapisz wyniki",
+            "wyniki_statystyki.csv",
+            "CSV (*.csv)"
+        )
 
 # wykres
     def rysuj_wykres(self):
