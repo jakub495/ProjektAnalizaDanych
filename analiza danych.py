@@ -49,7 +49,7 @@ class OknoGlowne(QMainWindow):
 
                 self.df = self.df.apply(pd.to_numeric, errors='coerce') # zamiana na liczby i  usuwanie liter
                 self.odswiez_tabele()
-                QMessageBox.information(self, "Plik wczytany pomyślnie.")
+                QMessageBox.information(self, "Sukces", "Plik wczytany pomyślnie.")
             except Exception as e:
                 QMessageBox.critical(self, "Błąd", f"Nie udało się wczytać pliku: {e}")
 
@@ -58,13 +58,15 @@ class OknoGlowne(QMainWindow):
             df_display = self.df
             self.tabela.setRowCount(df_display.shape[0])
             self.tabela.setColumnCount(df_display.shape[1])
+            self.tabela.setHorizontalHeaderLabels(df_display.columns.astype(str))
+
             for i in range(df_display.shape[0]): # przenoszenie danych z df do tabelki w api
                 for j in range(df_display.shape[1]):
                     self.tabela.setItem(i, j, QTableWidgetItem(str(df_display.iloc[i, j])))
 
     def oblicz_statystyki(self):
         if self.df is None:
-            return QMessageBox.warning(self, "Najpierw wczytaj dane")
+            return QMessageBox.warning(self, "Błąd", "Najpierw wczytaj dane")
 
         try:
             kol_idx, ok1 = QInputDialog.getInt(
@@ -89,7 +91,7 @@ class OknoGlowne(QMainWindow):
                 dane = pd.to_numeric(wycinek, errors='coerce').dropna()
 
                 if len(dane) == 0:
-                    QMessageBox.warning(self, "Brak danych liczbowych w podanym zakresie")
+                    QMessageBox.warning(self, "Błąd", "Brak danych liczbowych w podanym zakresie")
                     return
 
                 wyniki = (f"Statystyki dla kolumny {kol_idx} (wiersze {start_w}-{end_w}):\n\n"
@@ -110,26 +112,48 @@ class OknoGlowne(QMainWindow):
 
 # wykres
     def rysuj_wykres(self):
-        if self.df is not None:
-            dane_ciagle = pd.Series(self.df.values.flatten()).dropna()
+        if self.df is None:
+            return QMessageBox.warning(self, "Błąd", "Najpierw wczytaj dane!")
 
-            plt.figure(figsize=(15, 5))
+        try:
+            kol_idx, ok1 = QInputDialog.getInt(
+                self, "Wybór kolumny",
+                f"Podaj numer kolumny (1-{len(self.df.columns)}):",
+                value=1, min=1, max=len(self.df.columns)
+            )
 
-            plt.plot(dane_ciagle, marker='o', linestyle='-', color='darkcyan', markersize=4)
+            if not ok1:
+                return
 
-            plt.title('Analiza NT-proBNP')
+            max_wierszy = len(self.df)
+            zakres, ok2 = QInputDialog.getText(
+                self, "Zakres wierszy",
+                f"Podaj zakres wierszy w kolumnie {kol_idx} (1-{max_wierszy}), np. 1-10:"
+            )
+
+            if ok2 and zakres:
+                start_w, end_w = map(int, zakres.split('-'))
+
+                wycinek = self.df.iloc[start_w - 1: end_w, kol_idx - 1]
+                dane = pd.to_numeric(wycinek, errors='coerce').dropna()
+                nazwa_kolumny = self.df.columns[kol_idx - 1]
+
+                if len(dane) == 0:
+                    QMessageBox.warning(self, "Błąd", "Brak danych liczbowych w podanym zakresie!")
+                    return
+
+            plt.figure(figsize=(10, 5))
+            plt.plot(dane.values, marker='o', linestyle='-', color='darkcyan', markersize=4)
+            plt.title(f'Pomiary {nazwa_kolumny}')
             plt.xlabel('Pomiar')
-            plt.ylabel('Wartość')
+            plt.ylabel('Wartość pomiaru')
             plt.grid(True, alpha=0.3)
 
-        # linie oddzielające kolumny
-            liczba_wierszy = len(self.df)
-            for i in range(1, len(self.df.columns)):
-                plt.axvline(x=i * liczba_wierszy, color='red', linestyle='--', alpha=0.5)
-
             plt.show()
-        else:
-            QMessageBox.warning(self, "Brak danych do wykresu")
+        except ValueError:
+            QMessageBox.critical(self, "Błąd", "Nieprawidłowy format zakresu. Użyj formatu np. '1-10'.")
+        except Exception as e:
+            QMessageBox.critical(self, "Błąd", f"Wystąpił nieoczekiwany błąd: {e}")
 
 
 if __name__ == "__main__":
