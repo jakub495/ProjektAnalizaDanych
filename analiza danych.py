@@ -2,6 +2,9 @@ import sys
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from reportlab.platypus import Image
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QPushButton, QFileDialog, QTableWidget, QTableWidgetItem, QInputDialog, QMessageBox, QLabel)
 
 # budowa api
@@ -13,8 +16,8 @@ class OknoGlowne(QMainWindow):
         self.init_ui()
 
     def init_ui(self):
-        self.setWindowTitle("Analiza NT-proBNP")
-        self.setGeometry(100, 100, 800, 600)
+        self.setWindowTitle("Analiza statystyczna pomiarów")
+        self.setGeometry(100, 100, 900, 700)
 
 
         layout = QVBoxLayout()
@@ -39,9 +42,14 @@ class OknoGlowne(QMainWindow):
         self.btn_eksport.clicked.connect(self.eksportuj_wyniki)
         layout.addWidget(self.btn_eksport)
 
+        self.btn_pdf = QPushButton("5. Eksportuj raport do PDF")
+        self.btn_pdf.clicked.connect(self.eksportuj_pdf)
+        layout.addWidget(self.btn_pdf)
+
         self.tabela = QTableWidget()
         layout.addWidget(QLabel("Podgląd danych:"))
         layout.addWidget(self.tabela)
+
 
     def wczytaj_plik(self):
         sciezka, _ = QFileDialog.getOpenFileName(self, "Otwórz plik", "", "Dane (*.csv *.json)")
@@ -74,14 +82,13 @@ class OknoGlowne(QMainWindow):
             return QMessageBox.warning(self, "Błąd", "Najpierw wczytaj dane")
 
         try:
-            kol_idx, ok1 = QInputDialog.getInt(
-                self, "Wybór kolumny",
-                f"Podaj numer kolumny (1-{len(self.df.columns)}):",
-                value=1, min=1, max=len(self.df.columns)
-            )
+            items = self.df.columns.tolist()
+            item, ok1 = QInputDialog.getItem(self, "Wybór kolumny", "Wybierz kolumnę do analizy:", items, 0, False)
 
-            if not ok1:
+            if not (ok1 and item):
                 return
+
+            kol_idx = items.index(item) + 1
 
             max_wierszy = len(self.df)
             zakres, ok2 = QInputDialog.getText(
@@ -130,12 +137,12 @@ class OknoGlowne(QMainWindow):
         if self.wyniki_statystyk is None:
             return QMessageBox.warning(self, "Błąd", "Najpierw wykonaj analizę statystyczną!")
 
-        sciezka, _ = QFileDialog.getSaveFileName(
-            self,
-            "Zapisz wyniki",
-            "wyniki_statystyki.csv",
-            "CSV (*.csv)"
-        )
+        sciezka, _ = QFileDialog.getSaveFileName(self, "Zapisz wyniki", "wyniki.csv", "CSV (*.csv)")
+        if sciezka:
+            # tymczasowy DataFrame z wyników słownika
+            df_wyniki = pd.DataFrame([self.wyniki_statystyk])
+            df_wyniki.to_csv(sciezka, index=False, sep=';', encoding='utf-8-sig')
+            QMessageBox.information(self, "Sukces", "Wyniki zapisane.")
 
 # wykres
     def rysuj_wykres(self):
@@ -181,6 +188,70 @@ class OknoGlowne(QMainWindow):
             QMessageBox.critical(self, "Błąd", "Nieprawidłowy format zakresu. Użyj formatu np. '1-10'.")
         except Exception as e:
             QMessageBox.critical(self, "Błąd", f"Wystąpił nieoczekiwany błąd: {e}")
+
+    def eksportuj_pdf(self):
+        if self.wyniki_statystyk is None or self.df is None:
+            return QMessageBox.warning(self, "Błąd", "Najpierw wykonaj analizę i wygeneruj dane!")
+
+        sciezka, _ = QFileDialog.getSaveFileName(
+            self,
+            "Zapisz raport PDF",
+            "raport.pdf",
+            "PDF (*.pdf)"
+        )
+
+        if not sciezka:
+            return
+
+        try:
+            # zapis wykresu do pdf
+            wykres_path = "wykres_tmp.png"
+
+            kol_idx = self.wyniki_statystyk["Kolumna"]
+            start_w = self.wyniki_statystyk["Wiersze_od"]
+            end_w = self.wyniki_statystyk["Wiersze_do"]
+
+            dane = self.df.iloc[start_w - 1:end_w, kol_idx - 1]
+            dane = pd.to_numeric(dane, errors='coerce').dropna()
+
+            plt.figure(figsize=(8, 4))
+            plt.plot(dane.values, marker='o')
+            plt.title("Wykres danych")
+            plt.xlabel("Pomiar")
+            plt.ylabel("Wartość")
+            plt.grid(True)
+
+            plt.savefig(wykres_path)
+            plt.close()
+
+            doc = SimpleDocTemplate(sciezka)
+            styles = getSampleStyleSheet()
+            elements = []
+
+            # tytuł
+            elements.append(Paragraph("Raport analizy statystycznej", styles['Title']))
+            elements.append(Spacer(1, 12))
+
+            # statystyki
+            for key, value in self.wyniki_statystyk.items():
+                elements.append(Paragraph(f"<b>{key}:</b> {value}", styles['Normal']))
+                elements.append(Spacer(1, 8))
+
+            elements.append(Spacer(1, 20))
+
+            # wykres
+            elements.append(Paragraph("Wykres danych:", styles['Heading2']))
+            elements.append(Spacer(1, 10))
+
+            img = Image(wykres_path, width=400, height=200)
+            elements.append(img)
+
+            doc.build(elements)
+
+            QMessageBox.information(self, "Sukces", "Raport PDF z wykresem zapisany!")
+
+        except Exception as e:
+            QMessageBox.critical(self, "Błąd", f"Błąd zapisu PDF: {e}")
 
 
 if __name__ == "__main__":
