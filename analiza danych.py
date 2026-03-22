@@ -269,7 +269,7 @@ class OknoGlowne(QMainWindow):
             img = Image(wykres_path, width=400, height=200)
             elements.append(img)
 
-            #dodawanie korelacji
+            #dodawanie korelacji tylko opis
             if self.macierz_korelacji is not None:
                 elements.append(Spacer(1, 20))
                 elements.append(Paragraph("Macierz korelacji:", styles['Heading2']))
