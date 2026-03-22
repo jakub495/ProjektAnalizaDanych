@@ -13,6 +13,7 @@ class OknoGlowne(QMainWindow):
         super().__init__()
         self.df = None
         self.wyniki_statystyk = None
+        self.macierz_korelacji = None
         self.init_ui()
 
     def init_ui(self):
@@ -38,11 +39,15 @@ class OknoGlowne(QMainWindow):
         self.przycisk_wykres.clicked.connect(self.rysuj_wykres)
         layout.addWidget(self.przycisk_wykres)
 
-        self.btn_eksport = QPushButton("4. Eksportuj wyniki do CSV")
+        self.btn_korelacja = QPushButton("4. Analiza korelacji")
+        self.btn_korelacja.clicked.connect(self.analiza_korelacji)
+        layout.addWidget(self.btn_korelacja)
+
+        self.btn_eksport = QPushButton("5. Eksportuj wyniki do CSV")
         self.btn_eksport.clicked.connect(self.eksportuj_wyniki)
         layout.addWidget(self.btn_eksport)
 
-        self.btn_pdf = QPushButton("5. Eksportuj raport do PDF")
+        self.btn_pdf = QPushButton("6. Eksportuj raport do PDF")
         self.btn_pdf.clicked.connect(self.eksportuj_pdf)
         layout.addWidget(self.btn_pdf)
 
@@ -56,9 +61,9 @@ class OknoGlowne(QMainWindow):
         if sciezka:
             try:
                 if sciezka.endswith('.csv'):
-                    self.df = pd.read_csv(sciezka)
+                    self.df = pd.read_csv(sciezka, sep=None, engine='python')
                 elif sciezka.endswith('.json'):
-                    self.df = pd.read_json(sciezka)
+                    self.df = pd.read_json(sciezka, sep=None, engine='python')
 
                 self.df = self.df.apply(pd.to_numeric, errors='coerce') # zamiana na liczby i  usuwanie liter
                 self.odswiez_tabele()
@@ -89,6 +94,7 @@ class OknoGlowne(QMainWindow):
                 return
 
             kol_idx = items.index(item) + 1
+            nazwa_kolumny = item
 
             max_wierszy = len(self.df)
             zakres, ok2 = QInputDialog.getText(
@@ -107,7 +113,7 @@ class OknoGlowne(QMainWindow):
                     return
 
                 self.wyniki_statystyk = {
-                    "Kolumna": kol_idx,
+                    "Kolumna": item,
                     "Wiersze_od": start_w,
                     "Wiersze_do": end_w,
                     "Średnia": np.mean(dane),
@@ -150,14 +156,13 @@ class OknoGlowne(QMainWindow):
             return QMessageBox.warning(self, "Błąd", "Najpierw wczytaj dane!")
 
         try:
-            kol_idx, ok1 = QInputDialog.getInt(
-                self, "Wybór kolumny",
-                f"Podaj numer kolumny (1-{len(self.df.columns)}):",
-                value=1, min=1, max=len(self.df.columns)
-            )
+            items = self.df.columns.tolist()
+            item, ok1 = QInputDialog.getItem(self, "Wybór kolumny", "Wybierz kolumnę do analizy:", items, 0, False)
 
-            if not ok1:
+            if not (ok1 and item):
                 return
+
+            kol_idx = items.index(item) + 1
 
             max_wierszy = len(self.df)
             zakres, ok2 = QInputDialog.getText(
@@ -189,6 +194,23 @@ class OknoGlowne(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Błąd", f"Wystąpił nieoczekiwany błąd: {e}")
 
+    # ewentualna koreelacja na maceirzach
+    def analiza_korelacji(self):
+        if self.df is None:
+            return QMessageBox.warning(self, "Błąd", "Najpierw wczytaj dane!")
+
+        try:
+            df_num = self.df.apply(pd.to_numeric, errors='coerce')
+            self.macierz_korelacji = df_num.corr(method='spearman')
+
+            tekst = "Macierz korelacji Spearmana:\n\n"
+            tekst += self.macierz_korelacji.to_string()
+
+            QMessageBox.information(self, "Korelacja", tekst)
+
+        except Exception as e:
+            QMessageBox.critical(self, "Błąd", f"Błąd obliczania korelacji: {e}")
+
     def eksportuj_pdf(self):
         if self.wyniki_statystyk is None or self.df is None:
             return QMessageBox.warning(self, "Błąd", "Najpierw wykonaj analizę i wygeneruj dane!")
@@ -205,9 +227,10 @@ class OknoGlowne(QMainWindow):
 
         try:
             # zapis wykresu do pdf
-            wykres_path = "wykres_tmp.png"
+            wykres_path = "wykres.png"
 
-            kol_idx = self.wyniki_statystyk["Kolumna"]
+            nazwa_kolumny = self.wyniki_statystyk["Kolumna"]
+            kol_idx = self.df.columns.tolist().index(nazwa_kolumny) + 1
             start_w = self.wyniki_statystyk["Wiersze_od"]
             end_w = self.wyniki_statystyk["Wiersze_do"]
 
@@ -216,7 +239,7 @@ class OknoGlowne(QMainWindow):
 
             plt.figure(figsize=(8, 4))
             plt.plot(dane.values, marker='o')
-            plt.title("Wykres danych")
+            plt.title(f"Wykres danych - {nazwa_kolumny}")
             plt.xlabel("Pomiar")
             plt.ylabel("Wartość")
             plt.grid(True)
@@ -246,7 +269,18 @@ class OknoGlowne(QMainWindow):
             img = Image(wykres_path, width=400, height=200)
             elements.append(img)
 
+            #dodawanie korelacji
+            if self.macierz_korelacji is not None:
+                elements.append(Spacer(1, 20))
+                elements.append(Paragraph("Macierz korelacji:", styles['Heading2']))
+                elements.append(Spacer(1, 10))
+
+                korelacja_text = self.macierz_korelacji.to_string()
+                elements.append(Paragraph(f"<font size=8>{korelacja_text}</font>", styles['Normal']))
+
             doc.build(elements)
+
+
 
             QMessageBox.information(self, "Sukces", "Raport PDF z wykresem zapisany!")
 
